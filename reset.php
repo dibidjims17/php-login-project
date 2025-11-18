@@ -2,34 +2,45 @@
 require 'config.php';
 require 'functions.php';
 
+use MongoDB\BSON\UTCDateTime;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = sanitize($_POST['email']);
-    $code = sanitize($_POST['code']);
-    $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
-
+    $reset_code = sanitize($_POST['reset_code']);
+    $new_password = $_POST['new_password'];
     $collection = $db->users;
-    $user = $collection->findOne(['email' => $email]);
+
+    $user = $collection->findOne(['email' => $email, 'reset_code' => (int)$reset_code]);
 
     if (!$user) {
-        $error = "Email not found.";
-    } elseif ($user['reset_code'] != $code) {
-        $error = "Invalid reset code.";
+        $error = "Invalid email or reset code.";
     } else {
-        // update password
-        $collection->updateOne(
-            ['email' => $email],
-            [
-                '$set' => ['password' => $password],
-                '$unset' => ['reset_code' => ""]
-            ]
-        );
+        // Check expiration
+        $expires = $user['reset_code_expires'] ?? null;
 
-        $success = "Password reset successful! You can now log in.";
+        if ($expires && $expires instanceof UTCDateTime) {
+            $expires_timestamp = (int)($expires->toDateTime()->format('U'));
+            if (time() > $expires_timestamp) {
+                $error = "Reset code has expired. Please request a new one.";
+            }
+        }
+
+        if (empty($error)) {
+            // Update password and remove reset code
+            $collection->updateOne(
+                ['email' => $email],
+                ['$set' => ['password' => password_hash($new_password, PASSWORD_DEFAULT)],
+                 '$unset' => ['reset_code' => '', 'reset_code_expires' => '']]
+            );
+
+            $success = "Password has been reset successfully! <a href='login.php'>Login here</a>";
+        }
     }
 }
 ?>
 
-<?php include 'header.php'; ?>
+<h2>Inventory System</h2>
+<hr>
 
 <h3>Reset Password</h3>
 
@@ -41,12 +52,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <input type="email" name="email" required><br><br>
 
     <label>Reset Code:</label><br>
-    <input type="text" name="code" required><br><br>
+    <input type="text" name="reset_code" required><br><br>
 
     <label>New Password:</label><br>
-    <input type="password" name="password" required><br><br>
+    <input type="password" name="new_password" required><br><br>
 
     <button type="submit">Reset Password</button>
+    <a href="forgot.php">
+        <button type="button">Back</button>
+    </a>
 </form>
 
 <?php include 'footer.php'; ?>
