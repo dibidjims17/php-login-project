@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Login success
         $_SESSION['user_id'] = (string) $user['_id'];
         $_SESSION['username'] = $user['username'];
+        $_SESSION['email'] = $user['email'] ?? '';
         $_SESSION['role'] = $user['role'] ?? 'user';
 
         redirect("dashboard.php");

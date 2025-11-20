@@ -1,62 +1,77 @@
 <?php
 // config.php
 
-require __DIR__ . '/vendor/autoload.php'; // Composer autoload
+require_once __DIR__ . '/vendor/autoload.php'; // Composer autoload
 use MongoDB\Client;
-use MongoDB\BSON\UTCDateTime;
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
 try {
-    // Connect to MongoDB
-    $mongo = new Client("mongodb://localhost:27017");
-    $db = $mongo->finals_system; // your database
+    $mongo = new MongoDB\Client("mongodb://localhost:27017");
+    $db = $mongo->finals_system;
+
+    // Collections
+    $users_col = $db->users;
+    $items_col = $db->items;
+    $borrow_log_col = $db->borrow_log;
+
 } catch (Exception $e) {
     die("Error connecting to MongoDB: " . $e->getMessage());
 }
 
-/**
- * Check if user is logged in
- */
-function is_logged_in(): bool {
-    return isset($_SESSION['user_id']);
+
+// --------------------
+// Helper Functions
+// --------------------
+
+// Check if user is logged in
+if (!function_exists('is_logged_in')) {
+    function is_logged_in(): bool {
+        return isset($_SESSION['user_id']);
+    }
 }
 
-/**
- * Check if user is admin
- */
-function is_admin(): bool {
-    return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+// Check if user is admin
+if (!function_exists('is_admin')) {
+    function is_admin(): bool {
+        return isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+    }
 }
 
-/**
- * Protect page: redirect to login if not logged in
- */
-function protect_page(): void {
-    if (!is_logged_in()) {
-        header("Location: login.php");
+// Protect a page (redirect if not logged in)
+if (!function_exists('protect_page')) {
+    function protect_page(): void {
+        if (!is_logged_in()) {
+            header("Location: login.php");
+            exit();
+        }
+    }
+}
+
+// Optional: redirect helper
+if (!function_exists('redirect')) {
+    function redirect(string $url): void {
+        header("Location: $url");
         exit();
     }
 }
 
-/**
- * Optional: Remember-me token handling
- * Usage: call at the start of pages to auto-login
- */
-function check_remember_me($db): void {
-    if (!isset($_SESSION['user_id']) && isset($_COOKIE['rememberme'])) {
-        $token = $_COOKIE['rememberme'];
-        $user = $db->users->findOne(['remember_token' => $token]);
+// Optional: Remember-me auto-login
+if (!function_exists('check_remember_me')) {
+    function check_remember_me($db): void {
+        if (!isset($_SESSION['user_id']) && isset($_COOKIE['rememberme'])) {
+            $token = $_COOKIE['rememberme'];
+            $user = $db->users->findOne(['remember_token' => $token]);
 
-        if ($user) {
-            $_SESSION['user_id'] = (string)$user['_id'];
-            $_SESSION['username'] = $user['username'] ?? '';
-            $_SESSION['role'] = $user['role'] ?? 'user';
-        } else {
-            // Invalid token, delete cookie
-            setcookie('rememberme', '', time() - 3600, '/');
+            if ($user) {
+                $_SESSION['user_id'] = (string)$user['_id'];
+                $_SESSION['username'] = $user['username'] ?? '';
+                $_SESSION['role'] = $user['role'] ?? 'user';
+            } else {
+                setcookie('rememberme', '', time() - 3600, '/');
+            }
         }
     }
 }
